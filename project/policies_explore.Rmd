@@ -1,0 +1,110 @@
+---
+title: "Privacy Policies Exploration"
+author:
+- name: Micah Altman
+  url: https://micahaltman.com
+  affiliation: MIT Libraries -- [Center for Research on Equitable and Open Scholarship](
+    https://libraries.mit.edu/creos/)
+  affiliation_url: https://libraries.mit.edu/creos/
+  orcid_id: 0000-0001-7382-6960
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: yes
+    toc_depth: 1
+    toc_float:
+      collapsed: true
+      smooth_scroll: false
+    number_section: yes
+    highlight: zenburn
+    code_folding: hide
+    includes:
+      in_header: header.html
+params:
+  refresh_data:
+    value: no
+    choices:
+    - yes
+    - no
+  debug:
+    value: no
+    choices:
+    - yes
+    - no
+bibliography: project.bib
+---
+```{css css-setup, echo=FALSE}
+aside {
+    float: right;
+    color: blue;
+}
+
+
+/* aside mod from tufte.css but remapped to aside element */
+aside {
+    float: right;
+    clear: right;
+    margin-right: -60%;
+    width: 50%;
+    margin-top: 0.3rem;
+    margin-bottom: 0;
+    font-size: 1.1rem;
+    line-height: 1.3;
+    vertical-align: baseline;
+    position: relative;
+}
+
+/*fix for DT scrolling and header alignment*/
+.dataTables_wrapper{ overflow-x: auto; clear:both; }
+```
+
+```{r setup, include=FALSE }
+### Setup 
+
+## Knit environment & parameters
+library(knitr)
+# options for this document
+GLOBALS <- params
+knitr::opts_chunk$set("message" = GLOBALS$debug)
+knitr::opts_chunk$set("warning" = GLOBALS$debug)
+knitr::opts_chunk$set("tidy" = FALSE) # already tidyed using stylr
+knitr::opts_chunk$set(autodep=TRUE)
+
+## Libraries
+# core data science
+library("tidyverse")
+library("magrittr")
+library("fs")
+library("httr")
+
+# table presentation
+library("gt")
+library("DT")
+
+# enhanced graphics 
+library("patchwork")
+library("plotly")
+
+# dynamic apps
+library("shiny")
+library("shinyjs")
+
+## Directories setup
+GLOBALS$data_dir  <- fs::path("./data")
+GLOBALS$src_dir  <- fs::path("./src")
+GLOBALS$checkpoint  <- fs::path("./checkpoint","checkpoint",ext="RData")
+```
+
+```{r setup-data}
+### Refresh plan set 
+
+if (GLOBALS$refresh_data) {
+  wd <- getwd()
+  setwd(GLOBALS$data_dir )
+  np <- fs::path(GLOBALS$src_dir,"fetch_data.R") %>% normalizePath
+  source(np)
+  setwd(wd)
+}
+
+source(fs::path(GLOBALS$src_dir,"build_db.R"))
+```
