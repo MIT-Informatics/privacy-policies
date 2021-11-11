@@ -98,13 +98,21 @@ GLOBALS$checkpoint  <- fs::path("./checkpoint","checkpoint",ext="RData")
 ```{r setup-data}
 ### Refresh plan set 
 
+## Note run the sources in the data directory
+
 if (GLOBALS$refresh_data) {
   wd <- getwd()
-  setwd(GLOBALS$data_dir )
   np <- fs::path(GLOBALS$src_dir,"fetch_data.R") %>% normalizePath
+  setwd(GLOBALS$data_dir )
   source(np)
   setwd(wd)
 }
 
-source(fs::path(GLOBALS$src_dir,"build_db.R"))
+if(TRUE) {
+  wd <- getwd()
+  np<-fs::path(GLOBALS$src_dir,"build_db.R")
+  setwd(GLOBALS$data_dir )
+  source(np)
+  setwd(wd)
+}
 ```

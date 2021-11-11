@@ -12,10 +12,12 @@ fetch_privaseer<-function(demo_only=TRUE){
   googledrive::drive_deauth()
   targetFolderURI <-  'https://drive.google.com/drive/folders/1zJFy13tqeWscvad-xUfAYGTG1Lhv74Mb'
   listing.drb <- drive_ls(targetFolderURI %>% as_id())
-  listing.drb %<>% drive_reveal(.,"size") %>% mutate(size=replace_na(0))
+  listing.drb %<>% drive_reveal(.,"size") %>% mutate(rsize=as.numeric(size), rsize=replace_na(rsize,0))
   if (demo_only) {
-    listing.drb %<>% filter(size < 100000000)
+    listing.drb %<>% filter(rsize < 100000000)
   }
   map_dfr( listing.drb %>% pull("id"),
-           drive_download )
+           drive_download, overwrite=TRUE )
 }
+
+fetch_privaseer()
