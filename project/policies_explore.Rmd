@@ -108,11 +108,16 @@ if (GLOBALS$refresh_data) {
   setwd(wd)
 }
 
-if(TRUE) {
   wd <- getwd()
   np<-fs::path(GLOBALS$src_dir,"build_db.R")
   setwd(GLOBALS$data_dir )
   source(np)
   setwd(wd)
-}
+  
+
+
+maindb.con <- setup_db()
+ptbls <- setup_privaseer_tables(con)
+tokens.tbl <- ptbls$tok
+para.tbl <- ptbls$par
 ```

@@ -118,8 +118,8 @@ ingest_privaseer_data <- function() {
                   as.character(ptbls$par$ops$x),
                   tx)
   }
+  dbDisconnect(con)
 }
 
 ingest_privaseer_data()
 
-dbDisconnect(maindb.con)
