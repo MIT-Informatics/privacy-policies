@@ -3,14 +3,19 @@ library("RSQLite")
 library("DBI")
 library("dbplyr")
 
-setup_db <- function() {
+setup_db <- function(force=FALSE) {
   maindb.file <- "main.sqlite"
+  if (!force & !file.exists(maindb.file)) {
+    stop("DB does not exist", maindb.file)
+  }
   con <- DBI::dbConnect(RSQLite::SQLite(), maindb.file)
   return(con)
 }
 
 setup_privaseer_tables <- function(con) {
   tl <- DBI::dbListTables(con)
+
+  #CREATE INDICES
   if (! all(c("privaseer_par","privaseer_tok","privaseer_file") %in% tl)) {
     DBI::dbCreateTable(con, "privaseer_par", tibble(file="aaa",par=1,text="aaa"))
     DBI::dbCreateTable(con, "privaseer_tok", tibble(file="aaa",par=1,token="aaa"))
@@ -31,7 +36,7 @@ library(tidytext)
 library(SnowballC)
 
 ingest_privaseer_data <- function() {
-  con <- setup_db()
+  con <- setup_db(force=TRUE)
   ptbls <- setup_privaseer_tables(con)
 
   ### Privaseer demo extraction
@@ -45,7 +50,7 @@ ingest_privaseer_data <- function() {
   ### iterate through file -- parsing
 
 
-  textElements <- c("p","li","table","pre","blockquote","div")
+  textElements <- c("p","li","table","pre","blockquote")
   lstop <- stop_words %>%
     filter(lexicon=="snowball") %>%
     select(word) %>% unlist() %>% as.character()
@@ -120,6 +125,4 @@ ingest_privaseer_data <- function() {
   }
   dbDisconnect(con)
 }
-
-ingest_privaseer_data()
 

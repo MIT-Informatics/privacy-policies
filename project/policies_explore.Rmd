@@ -108,16 +108,22 @@ if (GLOBALS$refresh_data) {
   setwd(wd)
 }
 
+if (TRUE) {
   wd <- getwd()
-  np<-fs::path(GLOBALS$src_dir,"build_db.R")
-  setwd(GLOBALS$data_dir )
+  np<-fs::path(GLOBALS$src_dir,"build_db.R")%>% normalizePath
+  setwd(GLOBALS$data_dir)
+  source(np)
+  if (GLOBALS$refresh_data) {
+    ingest_privaseer_data()
+  }
+  maindb.con <- setup_db()
+  ptbls <- setup_privaseer_tables(maindb.con)
+  tokens.tbl <- ptbls$tok
+  para.tbl <- ptbls$par
+  GLOBALS$con <- maindb.con
   source(np)
   setwd(wd)
-  
+}
 
-
-maindb.con <- setup_db()
-ptbls <- setup_privaseer_tables(con)
-tokens.tbl <- ptbls$tok
-para.tbl <- ptbls$par
+rm(setup_db,setup_privaseer_tables,np,wd,ptbls,maindb.con)
 ```
