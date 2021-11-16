@@ -3,6 +3,21 @@ library("RSQLite")
 library("DBI")
 library("dbplyr")
 
+### DBI Helper function
+
+## Note: dplyr:db_create_index appears to do the same thing, leaving this for
+##      documentation reasons
+# createIndex <- function(con, tbl, vars) {
+#   indexStatement <- function(tbl,vars) {
+#     paste0("CREATE INDEX ",tbl,"_",paste0(collapse="_",vars),
+#            " ON ",tbl,"(",  paste0(collapse=",",vars),");")
+#   }
+#   dbExecute(con,indexState(tbl,vars))
+# }
+
+
+###
+
 setup_db <- function(force=FALSE) {
   maindb.file <- "main.sqlite"
   if (!force & !file.exists(maindb.file)) {
@@ -15,11 +30,19 @@ setup_db <- function(force=FALSE) {
 setup_privaseer_tables <- function(con) {
   tl <- DBI::dbListTables(con)
 
-  #CREATE INDICES
   if (! all(c("privaseer_par","privaseer_tok","privaseer_file") %in% tl)) {
+    # create tables and indices
     DBI::dbCreateTable(con, "privaseer_par", tibble(file="aaa",par=1,text="aaa"))
+    dplyr::db_create_index(con,"privaseer_par","file")
+
     DBI::dbCreateTable(con, "privaseer_tok", tibble(file="aaa",par=1,token="aaa"))
+    dplyr::db_create_index(con,"privaseer_tok","token")
+    dplyr::db_create_index(con,"privaseer_tok","file")
+    dplyr::db_create_index(con,"privaseer_tok",c("file","token"))
+
+
     DBI::dbCreateTable(con, "privaseer_file", tibble(file="aaa"))
+    dplyr::db_create_index(con,"privaseer_file","file")
 
   }
   list(
@@ -55,7 +78,7 @@ ingest_privaseer_data <- function() {
     filter(lexicon=="snowball") %>%
     select(word) %>% unlist() %>% as.character()
 
-  for (i in policyFiles.ls) {
+  for (i in policyFiles.ls)  {
     if ((ptbls$file %>% filter(file==i) %>% collect() %>% nrow()) > 0) {
       print (paste("Found",i))
       next
@@ -89,7 +112,6 @@ ingest_privaseer_data <- function() {
       rename(text=value) %>%
       mutate(par=row_number(),file=i)
 
-
     ### Stemming and tokenizing
 
 
@@ -104,14 +126,14 @@ ingest_privaseer_data <- function() {
       select(-word)
 
     tok_ngram <- tok %>%
+      group_by(file,par) %>%
       unnest_tokens(`token`,`stemmed`,
                     token="skip_ngrams",
                     to_lower=TRUE,
-                    collapse="par",
                     n=2,
                     k=1)
 
-    # update
+    # update 3 tables
 
     dbAppendTable(con,
                   as.character(ptbls$file$ops$x),

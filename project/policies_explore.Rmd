@@ -18,8 +18,6 @@ output:
     number_section: yes
     highlight: zenburn
     code_folding: hide
-    includes:
-      in_header: header.html
 params:
   refresh_data:
     value: no
@@ -33,6 +31,7 @@ params:
     - no
 bibliography: project.bib
 ---
+
 ```{css css-setup, echo=FALSE}
 aside {
     float: right;
@@ -55,10 +54,34 @@ aside {
 }
 
 /*fix for DT scrolling and header alignment*/
-.dataTables_wrapper{ overflow-x: auto; clear:both; }
+/*.dataTables_wrapper{ overflow-x: auto; clear:both; }*/
 ```
 
-```{r setup, include=FALSE }
+# Setup
+
+This is all for setup. Optionally (based on the knit parameters) we retrieve the demo (or full) corpus from privaseer , and ingest it into a persistent database. (More details in git: [<https://github.com/MIT-Informatics/privacy-policies>](https://github.com/MIT-Informatics/privacy-policies) )
+
+The ingest process:
+
+-   unpacks the tar file
+
+-   iterates through each html policy file
+
+    -   parse the html into chunks (base on paragraphs and similar elements)
+
+    -   cleans the text (for odd characters, etc.)
+
+    -   splits it into words (tokens)
+
+    -   removes stop words
+
+    -   stems the terms
+
+    -   computes k-n ngrams
+
+-   these are all stored and indexed in three tables -- describing the file, paragraphs, and ngrams
+
+```{r setup,include=FALSE}
 ### Setup 
 
 ## Knit environment & parameters
@@ -83,6 +106,7 @@ library("DT")
 
 # enhanced graphics 
 library("patchwork")
+library("ggformula")
 library("plotly")
 
 # dynamic apps
@@ -101,18 +125,17 @@ GLOBALS$checkpoint  <- fs::path("./checkpoint","checkpoint",ext="RData")
 ## Note run the sources in the data directory
 
 if (GLOBALS$refresh_data) {
+  source(fs::path(GLOBALS$src_dir,"fetch_data.R"))
   wd <- getwd()
-  np <- fs::path(GLOBALS$src_dir,"fetch_data.R") %>% normalizePath
   setwd(GLOBALS$data_dir )
-  source(np)
+  fetch_privaseer()
   setwd(wd)
 }
 
 if (TRUE) {
   wd <- getwd()
-  np<-fs::path(GLOBALS$src_dir,"build_db.R")%>% normalizePath
-  setwd(GLOBALS$data_dir)
-  source(np)
+  source(fs::path(GLOBALS$src_dir,"build_db.R")) 
+  setwd(GLOBALS$data_dir )
   if (GLOBALS$refresh_data) {
     ingest_privaseer_data()
   }
@@ -121,9 +144,151 @@ if (TRUE) {
   tokens.tbl <- ptbls$tok
   para.tbl <- ptbls$par
   GLOBALS$con <- maindb.con
-  source(np)
   setwd(wd)
 }
 
-rm(setup_db,setup_privaseer_tables,np,wd,ptbls,maindb.con)
+
+rm(setup_db,setup_privaseer_tables,wd,ptbls,maindb.con)
+```
+
+# Overview
+
+-   How long are these policies?
+
+    ```{r descriptive-counts}
+
+    fcnts.tib <- 
+      para.tbl %>% 
+      count(file,name="npar") %>% 
+      collect() 
+      
+      (  
+       fcnts.tib %>%
+       gf_ash(~npar) +
+       labs(x="Number of paragraphs in policy")
+      ) %>%
+      ggplotly()
+      
+    ```
+
+-   How readable are they?
+
+    ```{r readability}
+
+    library(quanteda.textstats)
+
+    #TODO: refactor with subqueries on the file table  instead of cacheing entire list of file ids in memory
+    files.ls <- para.tbl %>% 
+       group_by(file) %>%
+       summarize(dummy=1) %>%
+       select(-dummy) %>%
+       collect() %>% pull()
+
+    readability_sq<-function(x) {
+       para.tbl %>%
+        filter(`file`==x) %>% 
+        select(`text`) %>%
+        collect() %>%
+        pull %>% 
+        str_flatten() %>% 
+        quanteda.textstats::textstat_readability() %>%
+        as.data.frame() %>%
+        select(-`document`) %>%
+        mutate(file=x) 
+    }
+
+    # use a sample since this is costly
+    system.time ({
+      sum.tib <- purrr::map_dfr(sample(files.ls,200), readability_sq)
+      sum.tib %<>% left_join(fcnts.tib,by="file") 
+    })
+
+    (sum.tib %>% 
+      gf_boxplot(~Flesch)) /
+    ( sum.tib %>% 
+      gf_point(Flesch~npar))
+    ```
+
+-   What are common words and phrases?
+
+```{r term-frequency}
+
+term.tib <- tokens.tbl %>%
+  count(token, name="freq") %>%
+  collect()
+
+doc.tib <- tokens.tbl %>%
+  count(token,file) %>% count(token, name="docfreq") %>%
+  collect()
+
+term.tib %<>% full_join(doc.tib, by="token") 
+rm(doc.tib)
+
+term.tib %>% slice_max(freq,n=1000) %>% DT::datatable()
+
+```
+
+```{r wordcloud}
+library(wordcloud2, quiet=TRUE)
+
+term.tib %>% 
+  select(token,freq) %>%
+  slice_max(freq,n=250) %>% 
+  rename(word=token) %>%
+  wordcloud2::wordcloud2()
+```
+
+# Statistical Purpose Terms
+
+## Frequency
+
+```{r spec-termslist}
+library(SnowballC,quiet=TRUE)
+
+statTerms.ls <- 
+  c("statistical",
+    "statistics",
+    "aggregate",
+    "aggregated",
+    "analytical",
+    "analytic",
+    "demographic")
+
+purposeTerms.ls <-
+  c("purpose","justification","basis","use")
+
+statTerms.ls %<>% SnowballC::wordStem() %>% unique()
+purposeTerms.ls %<>% SnowballC::wordStem() %>% unique()
+combinedTerms.ls <- expand_grid(x=statTerms.ls,y=purposeTerms.ls) %>% 
+  transmute(combined=paste(x,y)) %>% pull
+combinedTerms2.ls <- expand_grid(y=statTerms.ls,x=purposeTerms.ls) %>% 
+  transmute(combined=paste(x,y)) %>% pull
+
+statTerms.tib <- 
+  tibble(token=c(statTerms.ls,
+                 purposeTerms.ls,
+                 combinedTerms.ls,
+                 combinedTerms2.ls)) %>% 
+  left_join(term.tib,by="token") %>%
+  mutate(across(everything(),~replace_na(.x,0)))
+
+rm(statTerms.ls,purposeTerms.ls,combinedTerms.ls, combinedTerms2.ls)
+
+statTerms.tib %>% filter(freq>0) %>% arrange(desc(docfreq)) %>% gt
+```
+
+## Context of "Statistical Purpose" - Random Sample of 200
+
+```{r}
+
+selectTerm <- "statist purpos"
+
+termoccur.tib <- tokens.tbl %>%
+  filter(token==selectTerm) %>% select(file,par) %>% collect()
+
+samplestxt.tib <- para.tbl %>% right_join( (termoccur.tib %>% slice_sample(n=200)),
+                         by=c("file"="file","par"="par"), 
+                         copy=TRUE)  %>% collect()
+
+samplestxt.tib %>% select(text) %>% datatable()
 ```

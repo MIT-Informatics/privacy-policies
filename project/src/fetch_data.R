@@ -20,4 +20,3 @@ fetch_privaseer<-function(demo_only=TRUE){
            drive_download, overwrite=TRUE )
 }
 
-fetch_privaseer()
